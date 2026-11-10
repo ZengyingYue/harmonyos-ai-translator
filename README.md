@@ -79,3 +79,7 @@ entry/src/main/
 - **应用被系统挂起后悬浮球可能不响应剪贴板变化。** 这时点开悬浮球手动“粘贴”仍然可用。
 - API Key 以明文保存在应用沙箱的首选项里，不会上传到模型服务商以外的任何地方。
 - Anthropic 格式的 `max_tokens` 固定为 16000，如果接入的是输出上限更低的旧模型或第三方网关，需要在 `LlmClient.ets` 里调小 `ANTHROPIC_MAX_TOKENS`。
+
+## 许可证
+
+[MIT](LICENSE)
