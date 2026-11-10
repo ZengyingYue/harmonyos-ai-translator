@@ -1,0 +1,2 @@
+# 默认未开启混淆（见 entry/build-profile.json5）。
+# 注意：接口请求/响应体通过 JSON 序列化，开启属性混淆前需要保留 service/LlmClient.ets 与 common/Types.ets 中的字段名。

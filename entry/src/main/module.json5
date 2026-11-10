@@ -1,0 +1,49 @@
+{
+  "module": {
+    "name": "entry",
+    "type": "entry",
+    "description": "$string:module_desc",
+    "mainElement": "EntryAbility",
+    "deviceTypes": ["phone", "tablet", "2in1"],
+    "deliveryWithInstall": true,
+    "installationFree": false,
+    "pages": "$profile:main_pages",
+    "abilities": [
+      {
+        "name": "EntryAbility",
+        "srcEntry": "./ets/entryability/EntryAbility.ets",
+        "description": "$string:EntryAbility_desc",
+        "icon": "$media:app_icon",
+        "label": "$string:EntryAbility_label",
+        "startWindowIcon": "$media:start_icon",
+        "startWindowBackground": "$color:start_window_background",
+        "exported": true,
+        "skills": [
+          {
+            "entities": ["entity.system.home"],
+            "actions": ["action.system.home"]
+          },
+          {
+            // 系统分享入口：在任意应用里选中文字/截图后点“分享”，选择本应用即可翻译
+            "actions": ["ohos.want.action.sendData"],
+            "uris": [
+              { "scheme": "file", "utd": "general.text", "maxFileSupported": 1 },
+              { "scheme": "file", "utd": "general.image", "maxFileSupported": 1 }
+            ]
+          }
+        ]
+      }
+    ],
+    "requestPermissions": [
+      { "name": "ohos.permission.INTERNET" },
+      // 悬浮窗：受限开放权限（ACL），调试时由 DevEco Studio 自动签名申请，详见 README
+      { "name": "ohos.permission.SYSTEM_FLOAT_WINDOW" }
+      // 可选：复制后自动翻译（无需再点“粘贴”）。同为受限开放权限，签名里拿到授权后再取消下面的注释：
+      // ,{
+      //   "name": "ohos.permission.READ_PASTEBOARD",
+      //   "reason": "$string:reason_pasteboard",
+      //   "usedScene": { "abilities": ["EntryAbility"], "when": "always" }
+      // }
+    ]
+  }
+}

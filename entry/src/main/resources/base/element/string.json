@@ -1,0 +1,8 @@
+{
+  "string": [
+    { "name": "module_desc", "value": "基于大模型的翻译" },
+    { "name": "EntryAbility_desc", "value": "复制翻译、截图翻译、悬浮窗翻译" },
+    { "name": "EntryAbility_label", "value": "AI 翻译" },
+    { "name": "reason_pasteboard", "value": "用于在您复制文字后自动翻译剪贴板内容" }
+  ]
+}
