@@ -3,6 +3,7 @@ import { window } from '@kit.ArkUI';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { errText } from '../common/Util';
 import { FloatWindowManager } from '../service/FloatWindowManager';
+import { HistoryStore } from '../service/HistoryStore';
 import { SettingsStore } from '../service/SettingsStore';
 
 const TAG: string = 'AiTranslator';
@@ -10,6 +11,7 @@ const TAG: string = 'AiTranslator';
 export default class EntryAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     SettingsStore.init(this.context);
+    HistoryStore.init(this.context);
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {

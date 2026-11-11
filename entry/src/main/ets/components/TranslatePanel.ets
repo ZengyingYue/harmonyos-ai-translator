@@ -14,6 +14,7 @@ import {
 import { delay, errText } from '../common/Util';
 import { ClipboardUtil, ClipContent } from '../service/ClipboardUtil';
 import { FloatWindowManager } from '../service/FloatWindowManager';
+import { HistoryItem, HistoryStore, IMAGE_SOURCE_MARK } from '../service/HistoryStore';
 import { ImageUtil } from '../service/ImageUtil';
 import { LlmTask } from '../service/LlmClient';
 import { LengthMetrics } from '@kit.ArkUI';
@@ -43,6 +44,8 @@ export struct TranslatePanel {
   @State srcIdx: number = 0;
   @State tgtIdx: number = 0;
   @State providerLabel: string = '';
+  @State showHistory: boolean = false;
+  @State history: HistoryItem[] = [];
   @StorageProp(KEY_SETTINGS_VERSION) @Watch('onSettingsChanged') settingsVersion: number = 0;
   @StorageProp(KEY_SHARE_SEQ) @Watch('onShare') shareSeq: number = 0;
   @StorageProp(KEY_CLIP_SEQ) @Watch('onClipboardChanged') clipSeq: number = 0;
@@ -143,6 +146,7 @@ export struct TranslatePanel {
       });
       if (id === this.runId) {
         this.result = out;
+        HistoryStore.add(this.inputText, out);
       }
     } catch (e) {
       if (id === this.runId && !task.cancelled) {
@@ -336,7 +340,131 @@ export struct TranslatePanel {
     });
   }
 
+  // ---------- 历史记录 ----------
+  private openHistory(): void {
+    this.history = HistoryStore.list();
+    this.showHistory = true;
+  }
+
+  /** 点一条历史：把原文和译文放回面板 */
+  private restore(item: HistoryItem): void {
+    this.cancel();
+    this.preview = null;
+    this.errorMsg = '';
+    this.inputText = item.source === IMAGE_SOURCE_MARK ? '' : item.source;
+    this.result = item.result;
+    this.showHistory = false;
+  }
+
+  private removeHistory(id: number): void {
+    HistoryStore.remove(id);
+    this.history = HistoryStore.list();
+  }
+
+  private confirmClearHistory(): void {
+    this.getUIContext().showAlertDialog({
+      title: '清空历史',
+      message: '确定删除全部 ' + this.history.length + ' 条翻译记录吗？',
+      primaryButton: {
+        value: '取消',
+        action: () => {
+        }
+      },
+      secondaryButton: {
+        value: '清空',
+        fontColor: $r('app.color.danger'),
+        action: () => {
+          HistoryStore.clear();
+          this.history = [];
+        }
+      }
+    });
+  }
+
+  private timeLabel(ms: number): string {
+    const d = new Date(ms);
+    const two = (n: number): string => (n < 10 ? '0' : '') + n;
+    return two(d.getMonth() + 1) + '-' + two(d.getDate()) + ' ' + two(d.getHours()) + ':' + two(d.getMinutes());
+  }
+
   // ---------- 界面 ----------
+  @Builder
+  HistoryView() {
+    Row({ space: 8 }) {
+      Text('翻译历史')
+        .fontSize(16)
+        .fontWeight(FontWeight.Medium)
+        .fontColor($r('app.color.text_primary'))
+        .layoutWeight(1)
+      if (this.history.length > 0) {
+        this.ActionButton('清空', () => {
+          this.confirmClearHistory();
+        })
+      }
+      this.ActionButton('返回', () => {
+        this.showHistory = false;
+      })
+    }
+    .width('100%')
+
+    if (this.history.length === 0) {
+      Text('还没有翻译记录')
+        .fontSize(14)
+        .fontColor($r('app.color.text_secondary'))
+        .textAlign(TextAlign.Center)
+        .width('100%')
+        .layoutWeight(1)
+    } else {
+      List({ space: 8 }) {
+        ForEach(this.history, (item: HistoryItem) => {
+          ListItem() {
+            Row({ space: 4 }) {
+              Column({ space: 4 }) {
+                Text(item.source)
+                  .fontSize(13)
+                  .fontColor($r('app.color.text_secondary'))
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  .width('100%')
+                Text(item.result)
+                  .fontSize(15)
+                  .fontColor($r('app.color.text_primary'))
+                  .maxLines(2)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  .width('100%')
+                Text(this.timeLabel(item.id))
+                  .fontSize(11)
+                  .fontColor($r('app.color.text_secondary'))
+                  .width('100%')
+              }
+              .layoutWeight(1)
+
+              Text('✕')
+                .fontSize(14)
+                .fontColor($r('app.color.text_secondary'))
+                .textAlign(TextAlign.Center)
+                .width(32)
+                .height(32)
+                .onClick(() => {
+                  this.removeHistory(item.id);
+                })
+            }
+            .width('100%')
+            .padding({ left: 12, right: 4, top: 10, bottom: 10 })
+            .borderRadius(12)
+            .backgroundColor($r('app.color.field_bg'))
+            .onClick(() => {
+              this.restore(item);
+            })
+          }
+        }, (item: HistoryItem) => item.id.toString())
+      }
+      .layoutWeight(1)
+      .width('100%')
+      .scrollBar(BarState.Auto)
+    }
+  }
+
   @Builder
   ActionButton(label: string, onTap: () => void) {
     Button(label, { type: ButtonType.Capsule })
@@ -350,6 +478,18 @@ export struct TranslatePanel {
 
   build() {
     Column({ space: this.compact ? 8 : 12 }) {
+      if (this.showHistory) {
+        this.HistoryView()
+      } else {
+        this.MainView()
+      }
+    }
+    .width('100%')
+    .height('100%')
+  }
+
+  @Builder
+  MainView() {
       // 语言选择
       Row() {
         Select(this.sourceOptions())
@@ -495,13 +635,16 @@ export struct TranslatePanel {
       .backgroundColor($r('app.color.field_bg'))
       .borderRadius(12)
 
-      Row() {
+      Row({ space: 8 }) {
         Text(this.providerLabel)
           .fontSize(12)
           .fontColor($r('app.color.text_secondary'))
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1)
+        this.ActionButton('历史', () => {
+          this.openHistory();
+        })
         if (this.result.length > 0) {
           this.ActionButton('复制译文', () => {
             this.copyResult();
@@ -510,8 +653,5 @@ export struct TranslatePanel {
       }
       .width('100%')
       .height(36)
-    }
-    .width('100%')
-    .height('100%')
   }
 }

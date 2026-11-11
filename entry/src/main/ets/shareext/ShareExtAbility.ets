@@ -3,6 +3,7 @@ import { systemShare } from '@kit.ShareKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { KEY_SHARE_IMAGE, KEY_SHARE_SEQ, KEY_SHARE_TEXT } from '../common/Types';
 import { errText } from '../common/Util';
+import { HistoryStore } from '../service/HistoryStore';
 import { SettingsStore } from '../service/SettingsStore';
 
 const TAG: string = 'AiTranslator';
@@ -16,6 +17,7 @@ export default class ShareExtAbility extends ShareExtensionAbility {
 
   onSessionCreate(want: Want, session: UIExtensionContentSession): void {
     SettingsStore.init(this.context);
+    HistoryStore.init(this.context);
     const storage = new LocalStorage();
     storage.setOrCreate('session', session);
 
