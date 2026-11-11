@@ -22,9 +22,23 @@
           {
             "entities": ["entity.system.home"],
             "actions": ["action.system.home"]
-          },
+          }
+        ]
+      }
+    ],
+    "extensionAbilities": [
+      {
+        // 系统分享面板入口：在任意应用选中文字（或打开截图）→“分享”→“AI 翻译”，
+        // 译文面板直接叠在当前应用之上
+        "name": "ShareExtAbility",
+        "srcEntry": "./ets/shareext/ShareExtAbility.ets",
+        "description": "$string:ShareExt_desc",
+        "icon": "$media:app_icon",
+        "label": "$string:EntryAbility_label",
+        "type": "share",
+        "exported": true,
+        "skills": [
           {
-            // 系统分享入口：在任意应用里选中文字/截图后点“分享”，选择本应用即可翻译
             "actions": ["ohos.want.action.sendData"],
             "uris": [
               { "scheme": "file", "utd": "general.text", "maxFileSupported": 1 },

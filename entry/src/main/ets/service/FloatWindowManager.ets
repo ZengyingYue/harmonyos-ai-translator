@@ -6,7 +6,9 @@ import {
   KEY_CLIP_SEQ,
   KEY_FLOAT_CAPTURING,
   KEY_FLOAT_EXPANDED,
-  KEY_FLOAT_SHOWN
+  KEY_FLOAT_SCROLLING,
+  KEY_FLOAT_SHOWN,
+  KEY_SCROLL_STOP
 } from '../common/Types';
 import { px } from '../common/Util';
 import { ClipboardUtil } from './ClipboardUtil';
@@ -19,6 +21,8 @@ const EDGE_MARGIN_VP: number = 6;
 const PANEL_MAX_WIDTH_VP: number = 360;
 const PANEL_MAX_HEIGHT_VP: number = 500;
 const SAFE_TOP_VP: number = 40;
+/** 滚动截屏时“完成”按钮的大小 */
+export const STOP_SIZE_VP: number = 52;
 
 export class Point {
   x: number = 0;
@@ -41,6 +45,12 @@ export class FloatWindowManager {
   /** 悬浮球收起时停靠的位置（px） */
   private static ballX: number = 0;
   private static ballY: number = 0;
+  /** 进入滚动截屏前面板的位置与尺寸，结束后恢复 */
+  private static savedX: number = 0;
+  private static savedY: number = 0;
+  private static savedW: number = 0;
+  private static savedH: number = 0;
+  private static scrolling: boolean = false;
   private static clipSeq: number = 0;
   private static clipListener: (() => void) | null = null;
 
@@ -98,6 +108,8 @@ export class FloatWindowManager {
     FloatWindowManager.curH = ball;
     AppStorage.setOrCreate(KEY_FLOAT_EXPANDED, false);
     AppStorage.setOrCreate(KEY_FLOAT_CAPTURING, false);
+    AppStorage.setOrCreate(KEY_FLOAT_SCROLLING, false);
+    AppStorage.setOrCreate(KEY_SCROLL_STOP, false);
     AppStorage.setOrCreate(KEY_CLIP_HINT, false);
     AppStorage.setOrCreate(KEY_FLOAT_SHOWN, true);
     FloatWindowManager.watchClipboard();
@@ -108,6 +120,10 @@ export class FloatWindowManager {
     const win = FloatWindowManager.win;
     FloatWindowManager.win = null;
     FloatWindowManager.expanded = false;
+    FloatWindowManager.scrolling = false;
+    // 若正在滚动截屏，让它结束
+    AppStorage.setOrCreate(KEY_SCROLL_STOP, true);
+    AppStorage.setOrCreate(KEY_FLOAT_SCROLLING, false);
     AppStorage.setOrCreate(KEY_FLOAT_SHOWN, false);
     AppStorage.setOrCreate(KEY_FLOAT_EXPANDED, false);
     if (win !== null) {
@@ -198,6 +214,59 @@ export class FloatWindowManager {
     const margin = px(EDGE_MARGIN_VP);
     const toLeft = FloatWindowManager.curX + ball / 2 < d.width / 2;
     FloatWindowManager.moveTo(toLeft ? margin : d.width - ball - margin, FloatWindowManager.curY);
+  }
+
+  /**
+   * 滚动截屏开始：把窗口缩成右上角的一个“完成”按钮，
+   * 这样用户可以滚动下面的应用，按钮也只会出现在长图最顶部一次。
+   */
+  static async enterScrollMode(): Promise<void> {
+    const win = FloatWindowManager.win;
+    if (win === null || FloatWindowManager.scrolling) {
+      return;
+    }
+    FloatWindowManager.scrolling = true;
+    FloatWindowManager.savedX = FloatWindowManager.curX;
+    FloatWindowManager.savedY = FloatWindowManager.curY;
+    FloatWindowManager.savedW = FloatWindowManager.curW;
+    FloatWindowManager.savedH = FloatWindowManager.curH;
+    const d = display.getDefaultDisplaySync();
+    const size = px(STOP_SIZE_VP);
+    AppStorage.setOrCreate(KEY_SCROLL_STOP, false);
+    AppStorage.setOrCreate(KEY_FLOAT_SCROLLING, true);
+    try {
+      await win.resize(size, size);
+      await win.moveWindowTo(d.width - size - px(EDGE_MARGIN_VP), px(SAFE_TOP_VP));
+    } catch (e) {
+      // 忽略
+    }
+  }
+
+  /** 滚动截屏结束：恢复成之前的翻译面板 */
+  static async exitScrollMode(): Promise<void> {
+    const win = FloatWindowManager.win;
+    if (!FloatWindowManager.scrolling) {
+      return;
+    }
+    FloatWindowManager.scrolling = false;
+    if (win !== null) {
+      try {
+        await win.resize(FloatWindowManager.savedW, FloatWindowManager.savedH);
+        await win.moveWindowTo(FloatWindowManager.savedX, FloatWindowManager.savedY);
+      } catch (e) {
+        // 忽略
+      }
+    }
+    AppStorage.setOrCreate(KEY_FLOAT_SCROLLING, false);
+    AppStorage.setOrCreate(KEY_SCROLL_STOP, false);
+  }
+
+  static requestScrollStop(): void {
+    AppStorage.setOrCreate(KEY_SCROLL_STOP, true);
+  }
+
+  static scrollStopRequested(): boolean {
+    return AppStorage.get<boolean>(KEY_SCROLL_STOP) === true;
   }
 
   /** 截屏前把悬浮窗变透明，避免挡住要翻译的内容 */

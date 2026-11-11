@@ -156,7 +156,7 @@ struct ProviderEdit {
     this.testMsg = '';
     try {
       const reply = await LlmClient.complete(this.current(),
-        'You are a connectivity check. Reply with the single word OK.', 'ping', null, false,
+        'You are a connectivity check. Reply with the single word OK.', 'ping', [], false,
         (full: string) => {
         }, task);
       this.testOk = true;

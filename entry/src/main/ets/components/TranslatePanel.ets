@@ -16,7 +16,9 @@ import { ClipboardUtil, ClipContent } from '../service/ClipboardUtil';
 import { FloatWindowManager } from '../service/FloatWindowManager';
 import { ImageUtil } from '../service/ImageUtil';
 import { LlmTask } from '../service/LlmClient';
+import { LengthMetrics } from '@kit.ArkUI';
 import { ScreenCapture } from '../service/ScreenCapture';
+import { StitchResult } from '../service/LongStitcher';
 import { SettingsStore } from '../service/SettingsStore';
 import { Translator } from '../service/Translator';
 
@@ -24,11 +26,13 @@ type Job = (task: LlmTask, onDelta: (full: string) => void) => Promise<string>;
 
 /**
  * 翻译面板：输入/粘贴/图片/截屏 → 译文。
- * 主页面和悬浮窗共用；compact 为 true 时是悬浮窗里的紧凑布局。
+ * 主页面、悬浮窗、分享面板共用。
+ * compact：紧凑布局；floating：位于悬浮窗内（多一个“截屏”按钮，并响应剪贴板变化）。
  */
 @Component
 export struct TranslatePanel {
   @Prop compact: boolean = false;
+  @Prop floating: boolean = false;
   @State inputText: string = '';
   @State result: string = '';
   @State errorMsg: string = '';
@@ -48,7 +52,7 @@ export struct TranslatePanel {
 
   aboutToAppear(): void {
     this.loadSettings();
-    if (!this.compact && this.shareSeq > 0) {
+    if (!this.floating && this.shareSeq > 0) {
       // 冷启动时分享数据可能先于页面到达
       this.onShare();
     }
@@ -165,10 +169,18 @@ export struct TranslatePanel {
   }
 
   private async translateImage(pm: image.PixelMap): Promise<void> {
-    this.preview = pm;
+    await this.translateImages(pm, [pm]);
+  }
+
+  /**
+   * @param preview 显示在面板里的预览图
+   * @param parts 实际送去识别/翻译的图片（长截屏是按屏切开的多张）
+   */
+  private async translateImages(preview: image.PixelMap, parts: image.PixelMap[]): Promise<void> {
+    this.preview = preview;
     this.inputText = '';
     await this.run('识别并翻译图片中…', (task: LlmTask, onDelta: (full: string) => void) =>
-    Translator.translateImage(pm, (source: string) => {
+    Translator.translateImages(parts, (source: string) => {
       this.inputText = source;
     }, onDelta, task));
   }
@@ -232,10 +244,47 @@ export struct TranslatePanel {
     }
   }
 
+  /**
+   * 悬浮窗里的“长截屏”：录屏期间用户手动向上滚动页面，点“完成”后拼成长图再翻译。
+   * 三方应用无法替用户滚动别的应用，所以滚动这一步需要手动做。
+   */
+  private async captureScrolling(): Promise<void> {
+    const ctx = this.getUIContext().getHostContext();
+    if (ctx === undefined) {
+      return;
+    }
+    this.cancel();
+    this.errorMsg = '';
+    this.result = '';
+    let stitched: StitchResult | null = null;
+    await FloatWindowManager.enterScrollMode();
+    try {
+      stitched = await ScreenCapture.captureScrolling(ctx, () => {
+        this.toast('开始录制：请慢慢向上滑动页面，滑完后点右上角“完成”');
+      }, () => FloatWindowManager.scrollStopRequested(), (message: string) => {
+        // 第一次进度回调说明录制已结束：先把面板恢复出来，再显示拼接进度
+        FloatWindowManager.exitScrollMode();
+        this.statusText = message;
+      });
+    } catch (e) {
+      this.errorMsg = errText(e);
+    } finally {
+      await FloatWindowManager.exitScrollMode();
+      this.statusText = '';
+    }
+    if (stitched === null) {
+      return;
+    }
+    if (stitched.steps === 0) {
+      this.toast('没有检测到滚动，按普通截屏翻译');
+    }
+    await this.translateImages(stitched.full, stitched.slices);
+  }
+
   // ---------- 外部触发 ----------
-  /** 其他应用分享进来的文字/图片（仅主页面处理） */
+  /** 其他应用分享进来的文字/图片（悬浮窗不处理） */
   onShare(): void {
-    if (this.compact) {
+    if (this.floating) {
       return;
     }
     const text = AppStorage.get<string>(KEY_SHARE_TEXT) ?? '';
@@ -256,7 +305,7 @@ export struct TranslatePanel {
 
   /** 悬浮窗开启期间剪贴板发生变化（仅悬浮窗处理） */
   onClipboardChanged(): void {
-    if (!this.compact) {
+    if (!this.floating) {
       return;
     }
     if (!ClipboardUtil.hasReadPermission()) {
@@ -363,8 +412,12 @@ export struct TranslatePanel {
           .alignSelf(ItemAlign.Start)
       }
 
-      // 操作
-      Row({ space: 8 }) {
+      // 操作（按钮较多，窄屏时自动换行）
+      Flex({
+        wrap: FlexWrap.Wrap,
+        alignItems: ItemAlign.Center,
+        space: { main: LengthMetrics.vp(8), cross: LengthMetrics.vp(8) }
+      }) {
         PasteButton({ icon: PasteIconStyle.LINES, text: PasteDescription.PASTE, buttonType: ButtonType.Capsule })
           .height(36)
           .fontSize(14)
@@ -378,12 +431,14 @@ export struct TranslatePanel {
         this.ActionButton('相册', () => {
           this.pickImage();
         })
-        if (this.compact) {
+        if (this.floating) {
           this.ActionButton('截屏', () => {
             this.captureScreen();
           })
+          this.ActionButton('长截屏', () => {
+            this.captureScrolling();
+          })
         }
-        Blank()
         Button(this.busy ? '停止' : '翻译', { type: ButtonType.Capsule })
           .height(36)
           .fontSize(14)

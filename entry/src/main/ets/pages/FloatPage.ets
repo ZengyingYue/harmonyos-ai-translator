@@ -1,7 +1,7 @@
 import { TranslatePanel } from '../components/TranslatePanel';
-import { KEY_CLIP_HINT, KEY_FLOAT_CAPTURING, KEY_FLOAT_EXPANDED } from '../common/Types';
+import { KEY_CLIP_HINT, KEY_FLOAT_CAPTURING, KEY_FLOAT_EXPANDED, KEY_FLOAT_SCROLLING } from '../common/Types';
 import { px } from '../common/Util';
-import { BALL_SIZE_VP, FloatWindowManager } from '../service/FloatWindowManager';
+import { BALL_SIZE_VP, FloatWindowManager, STOP_SIZE_VP } from '../service/FloatWindowManager';
 
 /** 手指移动超过这个距离（vp）才算拖动，否则算点击 */
 const DRAG_THRESHOLD_VP: number = 6;
@@ -13,6 +13,7 @@ struct FloatPage {
   @StorageProp(KEY_FLOAT_EXPANDED) expanded: boolean = false;
   @StorageProp(KEY_FLOAT_CAPTURING) capturing: boolean = false;
   @StorageProp(KEY_CLIP_HINT) clipHint: boolean = false;
+  @StorageProp(KEY_FLOAT_SCROLLING) scrolling: boolean = false;
   private downX: number = 0;
   private downY: number = 0;
   private originX: number = 0;
@@ -87,6 +88,23 @@ struct FloatPage {
     })
   }
 
+  /** 滚动截屏进行中显示的“完成”按钮 */
+  @Builder
+  StopButton() {
+    Text('完成')
+      .fontSize(14)
+      .fontWeight(FontWeight.Medium)
+      .fontColor(Color.White)
+      .textAlign(TextAlign.Center)
+      .width(STOP_SIZE_VP)
+      .height(STOP_SIZE_VP)
+      .borderRadius(STOP_SIZE_VP / 2)
+      .backgroundColor('#E84026')
+      .onClick(() => {
+        FloatWindowManager.requestScrollStop();
+      })
+  }
+
   @Builder
   HeaderButton(label: string, onTap: () => void) {
     Text(label)
@@ -122,7 +140,7 @@ struct FloatPage {
       .width('100%')
 
       Column() {
-        TranslatePanel({ compact: true })
+        TranslatePanel({ compact: true, floating: true })
       }
       .layoutWeight(1)
       .width('100%')
@@ -138,18 +156,22 @@ struct FloatPage {
 
   build() {
     Stack() {
-      // 两者都常驻，只切换可见性：面板收起后仍保留上次的译文，并继续响应剪贴板变化
+      // 悬浮球和面板都常驻，只切换可见性：面板收起后仍保留上次的译文，并继续响应剪贴板变化
       Column() {
         this.Ball()
       }
-      .visibility(this.expanded ? Visibility.None : Visibility.Visible)
+      .visibility(!this.expanded && !this.scrolling ? Visibility.Visible : Visibility.None)
+
+      if (this.scrolling) {
+        this.StopButton()
+      }
 
       Column() {
         this.Panel()
       }
       .width('100%')
       .height('100%')
-      .visibility(this.expanded ? Visibility.Visible : Visibility.None)
+      .visibility(this.expanded && !this.scrolling ? Visibility.Visible : Visibility.None)
     }
     .width('100%')
     .height('100%')

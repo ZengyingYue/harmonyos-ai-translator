@@ -3,6 +3,7 @@
     "pages/Index",
     "pages/Settings",
     "pages/ProviderEdit",
-    "pages/FloatPage"
+    "pages/FloatPage",
+    "pages/SharePage"
   ]
 }

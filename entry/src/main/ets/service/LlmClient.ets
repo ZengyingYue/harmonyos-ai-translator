@@ -217,13 +217,13 @@ function buildHeaders(p: ProviderConfig): Record<string, string> {
   return h;
 }
 
-function buildBody(p: ProviderConfig, system: string, userText: string, img: ImageInput | null,
+function buildBody(p: ProviderConfig, system: string, userText: string, imgs: ImageInput[],
   stream: boolean): string {
   const model = p.model.trim();
   if (p.format === FORMAT_ANTHROPIC) {
     const blocks: AnBlock[] = [];
-    if (img !== null) {
-      blocks.push({ type: 'image', source: { type: 'base64', media_type: img.mime, data: img.base64 } });
+    for (let i = 0; i < imgs.length; i++) {
+      blocks.push({ type: 'image', source: { type: 'base64', media_type: imgs[i].mime, data: imgs[i].base64 } });
     }
     blocks.push({ type: 'text', text: userText });
     const body: AnBody = {
@@ -237,8 +237,8 @@ function buildBody(p: ProviderConfig, system: string, userText: string, img: Ima
   }
   if (p.format === FORMAT_GEMINI) {
     const parts: GmPart[] = [];
-    if (img !== null) {
-      parts.push({ inline_data: { mime_type: img.mime, data: img.base64 } });
+    for (let i = 0; i < imgs.length; i++) {
+      parts.push({ inline_data: { mime_type: imgs[i].mime, data: imgs[i].base64 } });
     }
     parts.push({ text: userText });
     const body: GmBody = {
@@ -248,11 +248,11 @@ function buildBody(p: ProviderConfig, system: string, userText: string, img: Ima
     return JSON.stringify(body);
   }
   let content: string | OaPart[] = userText;
-  if (img !== null) {
-    const parts: OaPart[] = [
-      { type: 'text', text: userText },
-      { type: 'image_url', image_url: { url: 'data:' + img.mime + ';base64,' + img.base64 } }
-    ];
+  if (imgs.length > 0) {
+    const parts: OaPart[] = [{ type: 'text', text: userText }];
+    for (let i = 0; i < imgs.length; i++) {
+      parts.push({ type: 'image_url', image_url: { url: 'data:' + imgs[i].mime + ';base64,' + imgs[i].base64 } });
+    }
     content = parts;
   }
   const body: OaBody = {
@@ -394,9 +394,10 @@ function extractHttpError(code: number, raw: string): string {
 export class LlmClient {
   /**
    * 调用大模型并返回完整文本。
+   * @param imgs 随文字一起发送的图片，没有就传空数组
    * @param onDelta 流式输出时回调，参数是到目前为止累计的全文
    */
-  static async complete(p: ProviderConfig, system: string, userText: string, img: ImageInput | null,
+  static async complete(p: ProviderConfig, system: string, userText: string, imgs: ImageInput[],
     stream: boolean, onDelta: (full: string) => void, task: LlmTask): Promise<string> {
     if (p.baseUrl.trim().length === 0) {
       throw new Error('尚未填写 Base URL');
@@ -408,7 +409,7 @@ export class LlmClient {
     const options: http.HttpRequestOptions = {
       method: http.RequestMethod.POST,
       header: buildHeaders(p),
-      extraData: buildBody(p, system, userText, img, stream),
+      extraData: buildBody(p, system, userText, imgs, stream),
       connectTimeout: 30000,
       readTimeout: 300000
     };

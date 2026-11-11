@@ -17,6 +17,10 @@ export const KEY_CLIP_HINT: string = 'clipHint';
 export const KEY_FLOAT_SHOWN: string = 'floatShown';
 export const KEY_FLOAT_EXPANDED: string = 'floatExpanded';
 export const KEY_FLOAT_CAPTURING: string = 'floatCapturing';
+/** 滚动截屏进行中：悬浮窗缩成一个“完成”按钮 */
+export const KEY_FLOAT_SCROLLING: string = 'floatScrolling';
+/** 用户点了滚动截屏的“完成” */
+export const KEY_SCROLL_STOP: string = 'scrollStop';
 
 export interface ProviderConfig {
   id: string;

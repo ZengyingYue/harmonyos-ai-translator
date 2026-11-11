@@ -9,7 +9,8 @@
 | 悬浮窗 | 首页打开“悬浮窗”开关后出现可拖动的“译”字悬浮球，点开是翻译面板，可收起、可拖动 |
 | 复制翻译 | 在任意应用复制文字 → 点悬浮球 → 点“粘贴”。拿到剪贴板权限后可以复制即自动翻译 |
 | 截屏翻译 | 悬浮面板里点“截屏”，同意系统的屏幕采集提示后翻译当前画面；也可以从相册选截图 |
-| 分享翻译 | 任意应用里选中文字或打开图片 → “分享” → “AI 翻译”（不依赖悬浮窗权限） |
+| 长截屏翻译 | 悬浮面板里点“长截屏”，慢慢向上滑动页面，滑完点右上角“完成”，自动拼成长图并翻译 |
+| 选中文字翻译 | 任意应用里选中文字 → 选择菜单里点“分享” → “AI 翻译”，译文面板直接叠在当前应用上，不跳转、不需要任何权限。图片同理 |
 | 模型配置 | 支持 OpenAI 兼容（Chat Completions）、Anthropic（Messages）、Google Gemini 三种格式，可添加多个服务商并切换 |
 | 预设 | OpenAI、Claude、Gemini、DeepSeek、通义千问、智谱、Moonshot、豆包、硅基流动、OpenRouter、自定义 |
 | 其他 | 流式输出、自动识别语种、目标语言互换、自定义翻译要求、深色模式、连接测试 |
@@ -54,18 +55,21 @@ AppScope/                        应用级配置与图标
 entry/src/main/
   module.json5                   权限、分享入口声明
   ets/
-    entryability/EntryAbility.ets  应用入口，接收系统分享
+    entryability/EntryAbility.ets  应用入口
+    shareext/ShareExtAbility.ets   系统分享面板入口（选中文字 → 分享 → AI 翻译）
     pages/
       Index.ets                  首页
       Settings.ets               设置
       ProviderEdit.ets           服务商编辑、连接测试
       FloatPage.ets              悬浮窗内容（悬浮球 + 面板）
+      SharePage.ets              分享入口的译文面板
     components/TranslatePanel.ets  首页与悬浮窗共用的翻译面板
     service/
       LlmClient.ets              三种 API 格式的请求与流式解析
       Translator.ets             提示词、文本/图片翻译流程
       FloatWindowManager.ets     悬浮窗创建、展开收起、拖动、剪贴板监听
-      ScreenCapture.ets          截屏（AVScreenCapture 录一小段后取帧）
+      ScreenCapture.ets          截屏 / 滚动截屏（AVScreenCapture 录屏后取帧）
+      LongStitcher.ets           把滚动录屏按画面重叠拼成长图
       ClipboardUtil.ets          剪贴板读写与权限
       ImageUtil.ets              图片解码、压缩、base64
       SettingsStore.ets          设置持久化（用户首选项）
@@ -74,8 +78,10 @@ entry/src/main/
 
 ## 已知限制
 
+- **无法把“AI 翻译”直接加进系统的文字选择菜单。** 鸿蒙手机没有向三方应用开放这个菜单（没有类似 Android `PROCESS_TEXT` 的机制；系统的“划词服务”只支持接键鼠的 2in1 设备）。目前最短的路径是 选中 → 分享 → AI 翻译，多一步点击。
 - **悬浮窗权限在手机上能否获批取决于华为的审核政策。** 该权限早期只对平板 / 2in1 开放，手机上请以 AppGallery Connect 的最新说明为准。
 - **截屏每次都会弹系统授权提示。** 鸿蒙没有给三方应用提供静默截屏接口，这里用系统录屏接口录不到一秒再取最后一帧，截的是整屏，暂不支持框选区域。
+- **长截屏需要手动滚动。** 三方应用不能替用户滚动别的应用，所以是“录屏 + 你来滑 + 自动拼接”。只支持向上滑（内容上移）；滑得太快、页面有动画或大片纯色区域时，个别片段可能对不上而被跳过。长图上限约 6～7 屏，单次最长录 40 秒。“多模态模型”方式下最多 8 屏。
 - **应用被系统挂起后悬浮球可能不响应剪贴板变化。** 这时点开悬浮球手动“粘贴”仍然可用。
 - API Key 以明文保存在应用沙箱的首选项里，不会上传到模型服务商以外的任何地方。
 - Anthropic 格式的 `max_tokens` 固定为 16000，如果接入的是输出上限更低的旧模型或第三方网关，需要在 `LlmClient.ets` 里调小 `ANTHROPIC_MAX_TOKENS`。
